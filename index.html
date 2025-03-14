@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>ATS Resume Checker with Improvements</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        #result { margin-top: 20px; }
+        .error { color: red; }
+        .success { color: green; }
+        .score { font-size: 1.2em; font-weight: bold; }
+        .improvements { margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <h2>ATS Resume Checker</h2>
+    <input type="file" id="resumeUpload" accept=".pdf,.doc,.docx">
+    <button onclick="checkResume()">Check ATS Compatibility</button>
+    <div id="result"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.9.359/pdf.min.js"></script>
+    <script>
+        async function checkResume() {
+            const fileInput = document.getElementById('resumeUpload');
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = '';
+
+            if (!fileInput.files[0]) {
+                resultDiv.innerHTML = '<p class="error">Please upload a resume file.</p>';
+                return;
+            }
+
+            const file = fileInput.files[0];
+            const fileName = file.name.toLowerCase();
+            let issues = [];
+            let improvements = [];
+            let score = 0;
+
+            // Check file format (2 points for PDF)
+            if (fileName.endsWith('.pdf')) {
+                score += 2;
+            } else {
+                issues.push('File format is not PDF (current: ' + fileName.split('.').pop() + ')');
+                improvements.push('Convert your resume to PDF format for better ATS compatibility.');
+            }
+
+            try {
+                if (fileName.endsWith('.pdf')) {
+                    const arrayBuffer = await file.arrayBuffer();
+                    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                    let textContent = '';
+
+                    // Extract text from all pages
+                    for (let i = 1; i <= pdf.numPages; i++) {
+                        const page = await pdf.getPage(i);
+                        const text = await page.getTextContent();
+                        textContent += text.items.map(item => item.str).join(' ');
+                    }
+
+                    // Check if text-based (3 points)
+                    if (textContent.trim()) {
+                        score += 3;
+                    } else {
+                        issues.push('Resume is image-based, not text-based.');
+                        improvements.push('Ensure your resume is text-based (avoid scanned images or non-selectable text).');
+                    }
+
+                    // Check for common keywords (1 point each)
+                    const keywords = ['experience', 'skills', 'education'];
+                    keywords.forEach(keyword => {
+                        if (textContent.toLowerCase().includes(keyword)) {
+                            score += 1;
+                        } else {
+                            issues.push(`Missing keyword: "${keyword}"`);
+                            improvements.push(`Add a section or mention "${keyword}" to improve ATS parsing.`);
+                        }
+                    });
+
+                    // Check length (2 points for >100 words)
+                    const wordCount = textContent.split(' ').filter(word => word.length > 0).length;
+                    if (wordCount >= 100) {
+                        score += 2;
+                    } else {
+                        issues.push('Resume is too short (' + wordCount + ' words).');
+                        improvements.push('Expand your resume content to at least 100 words to provide more detail.');
+                    }
+
+                    // Additional open-source AI-inspired checks
+                    if (!textContent.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/)) {
+                        issues.push('No email address detected.');
+                        improvements.push('Include a professional email address in your resume.');
+                    }
+
+                    if (textContent.split('\n').length > 50) {
+                        issues.push('Possible overuse of line breaks or complex formatting.');
+                        improvements.push('Simplify formatting: use standard headings and reduce excessive line breaks.');
+                    }
+                } else {
+                    issues.push('Only PDF files can be fully analyzed.');
+                    improvements.push('Upload your resume as a PDF for a complete analysis.');
+                }
+
+                // Display results with score and improvements
+                resultDiv.innerHTML = '<p class="score">ATS Compatibility Score: ' + score + '/10</p>';
+                if (issues.length === 0) {
+                    resultDiv.innerHTML += '<p class="success">Resume appears ATS-compatible!</p>';
+                } else {
+                    resultDiv.innerHTML += '<p class="error">Found ' + issues.length + ' potential ATS issues:</p><ul>' +
+                        issues.map(issue => '<li>' + issue + '</li>').join('') + '</ul>' +
+                        '<div class="improvements"><p><strong>Suggested Improvements:</strong></p><ul>' +
+                        improvements.map(improvement => '<li>' + improvement + '</li>').join('') + '</ul></div>';
+                }
+            } catch (error) {
+                resultDiv.innerHTML = '<p class="error">Error processing file: ' + error.message + '</p>';
+            }
+        }
+    </script>
+</body>
+</html>
